@@ -800,18 +800,7 @@ with st.sidebar:
     use_demo = st.checkbox("Use demo data", value=(uploaded_file is None))
 
     st.markdown("---")
-    st.markdown("## About this app")
-    st.markdown(
-        """
-        This dashboard is designed to look like a project, not a classroom chart sheet.
-
-        The screen uses simple labels such as:
-        - Green Cover Score
-        - Water Presence Score
-        - Surface Heat
-        - Change Score
-        """
-    )
+    
 
 # =========================================================
 # LOAD / VALIDATE
