@@ -782,9 +782,7 @@ st.markdown(
     """
     <div class="top-card">
         <h1 style="margin:0; font-size:2rem;">SBECMS</h1>
-        <div class="small-note" style="margin-top:8px;">
-            A project-style dashboard for studying green cover, water presence, surface heat, and overall change across different places and situations.
-        </div>
+        
     </div>
     """,
     unsafe_allow_html=True,
