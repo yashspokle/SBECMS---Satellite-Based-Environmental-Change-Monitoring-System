@@ -19,7 +19,7 @@ except Exception:
 # PAGE SETUP
 # =========================================================
 st.set_page_config(
-    page_title="Environmental Change Dashboard",
+    page_title="SBECMS",
     layout="wide",
     initial_sidebar_state="expanded",
 )
