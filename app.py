@@ -7,6 +7,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 import streamlit as st
 
+col1, col2 = st.columns([1, 6])
+
+with col1:
+    st.image("logo.png", width=80)
+
+with col2:
+    st.markdown("""
+    ## SBECMS  
+    Satellite-Based Environmental Change Monitoring System
+    """)
 # Optional map support
 try:
     import pydeck as pdk
