@@ -1,7 +1,6 @@
+Geospatial Environmental Monitoring System (GEMS)
 
-# SBECMS — Satellite-Based Environmental Change Monitoring System
-
-SBECMS is an interactive Streamlit dashboard for analyzing environmental change using satellite-derived indicators. It helps users explore land condition, water presence, surface heat, and overall change patterns through a clean visual interface.
+GEMS is an interactive Streamlit dashboard for analyzing environmental change using satellite-derived indicators. It helps users explore land condition, water presence, surface heat, and overall change patterns through a clean visual interface.
 
 ## Overview
 
@@ -18,7 +17,7 @@ The dashboard focuses on:
 
 ## What the project does
 
-SBECMS allows users to:
+GEMS allows users to:
 
 - Upload CSV or Excel datasets
 - Use built-in demo data for testing
