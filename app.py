@@ -1,1118 +1,956 @@
+import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import streamlit as st
-from typing import List, Dict, Tuple
-
-try:
-    import pydeck as pdk
-    PYDECK_AVAILABLE = True
-except Exception:
-    PYDECK_AVAILABLE = False
-
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+import pydeck as pdk
 
 # =========================================================
-# PAGE SETUP
+# PAGE CONFIG
 # =========================================================
+
 st.set_page_config(
-    page_title="SBECMS",
+    page_title="AI Environmental Monitoring System",
+    page_icon="🌍",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed"
 )
 
 # =========================================================
-# THEME
+# MODERN UI
 # =========================================================
-BG = "#0b1220"
-PANEL = "#121b2a"
-PANEL_2 = "#172233"
-BORDER = "#263447"
-TEXT = "#e8eef7"
-MUTED = "#9aa8bb"
 
-ACCENT_1 = "#63a8ff"
-ACCENT_2 = "#47c27d"
-ACCENT_3 = "#ff8b6b"
-ACCENT_4 = "#b98cff"
-ACCENT_5 = "#f1c75b"
+st.markdown("""
+<style>
 
-LAND_COLORS = {
-    "Forest": ACCENT_2,
-    "Agriculture": ACCENT_5,
-    "Urban": ACCENT_3,
-    "Water": ACCENT_1,
-    "Barren": "#c9d1d9",
-    "Unknown": "#8b949e",
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Inter', sans-serif;
 }
 
-EVENT_COLORS = {
-    "None": MUTED,
-    "Flood": ACCENT_1,
-    "Wildfire": ACCENT_3,
-    "Drought": ACCENT_5,
+.stApp {
+    background: linear-gradient(135deg, #050816 0%, #0d1326 40%, #111827 100%);
+    color: white;
 }
 
-# =========================================================
-# STYLING
-# =========================================================
-st.markdown(
-    f"""
-    <style>
-        .stApp {{
-            background:
-                radial-gradient(circle at top left, rgba(99,168,255,0.08), transparent 28%),
-                radial-gradient(circle at top right, rgba(71,194,125,0.06), transparent 24%),
-                linear-gradient(180deg, #08101d 0%, {BG} 100%);
-            color: {TEXT};
-        }}
-
-        .block-container {{
-            padding-top: 1.2rem;
-            padding-bottom: 2rem;
-            max-width: 1450px;
-        }}
-
-        section[data-testid="stSidebar"] {{
-            background: linear-gradient(180deg, {PANEL} 0%, #101827 100%);
-            border-right: 1px solid {BORDER};
-        }}
-
-        [data-testid="stSidebar"] h1,
-        [data-testid="stSidebar"] h2,
-        [data-testid="stSidebar"] h3,
-        [data-testid="stSidebar"] label,
-        [data-testid="stSidebar"] p,
-        [data-testid="stSidebar"] div {{
-            color: {TEXT};
-        }}
-
-        .hero {{
-            background: linear-gradient(135deg, #13233a 0%, #0d1727 52%, #0a1321 100%);
-            border: 1px solid {BORDER};
-            border-radius: 20px;
-            padding: 20px 24px;
-            margin-bottom: 18px;
-            box-shadow: 0 14px 40px rgba(0,0,0,0.22);
-        }}
-
-        .hero-wrap {{
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 18px;
-            flex-wrap: wrap;
-        }}
-
-        .hero-title {{
-            margin: 0;
-            color: {TEXT};
-            font-size: 2rem;
-            font-weight: 800;
-            letter-spacing: 0.4px;
-            line-height: 1.05;
-        }}
-
-        .hero-subtitle {{
-            margin-top: 8px;
-            color: {MUTED};
-            font-size: 0.98rem;
-            line-height: 1.5;
-            max-width: 820px;
-        }}
-
-        .hero-pill-row {{
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }}
-
-        .hero-pill {{
-            background: rgba(255,255,255,0.04);
-            border: 1px solid {BORDER};
-            border-radius: 999px;
-            padding: 8px 14px;
-            color: {TEXT};
-            font-size: 0.84rem;
-            font-weight: 600;
-        }}
-
-        .hero-pill strong {{
-            color: {ACCENT_1};
-            font-weight: 700;
-        }}
-
-        .metric-card {{
-            background: linear-gradient(180deg, {PANEL_2} 0%, {PANEL} 100%);
-            border: 1px solid {BORDER};
-            border-radius: 16px;
-            padding: 16px 18px;
-            min-height: 108px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.14);
-        }}
-
-        .metric-label {{
-            color: {MUTED};
-            font-size: 0.9rem;
-            margin-bottom: 8px;
-        }}
-
-        .metric-value {{
-            color: {TEXT};
-            font-size: 1.9rem;
-            font-weight: 800;
-            line-height: 1.1;
-        }}
-
-        .metric-note {{
-            color: {MUTED};
-            font-size: 0.82rem;
-            margin-top: 8px;
-        }}
-
-        .info-card {{
-            background: linear-gradient(180deg, {PANEL_2} 0%, {PANEL} 100%);
-            border: 1px solid {BORDER};
-            border-radius: 16px;
-            padding: 18px 18px;
-            min-height: 150px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.14);
-        }}
-
-        .info-card h4 {{
-            margin-top: 0;
-            margin-bottom: 12px;
-            color: {TEXT};
-            font-size: 1.08rem;
-        }}
-
-        .info-card .small-note {{
-            color: {MUTED};
-            line-height: 1.7;
-            font-size: 0.95rem;
-        }}
-
-        .section-card {{
-            background: linear-gradient(180deg, {PANEL_2} 0%, {PANEL} 100%);
-            border: 1px solid {BORDER};
-            border-radius: 18px;
-            padding: 18px 18px 14px 18px;
-            margin-bottom: 16px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.14);
-        }}
-
-        .finding {{
-            background: rgba(255,255,255,0.03);
-            border: 1px solid {BORDER};
-            border-left: 4px solid {ACCENT_1};
-            padding: 12px 14px;
-            border-radius: 12px;
-            margin-bottom: 10px;
-            color: {TEXT};
-        }}
-
-        .stTabs [data-baseweb="tab-list"] {{
-            gap: 8px;
-            border-bottom: 1px solid {BORDER};
-            margin-bottom: 14px;
-        }}
-
-        .stTabs [data-baseweb="tab"] {{
-            background: transparent;
-            border-radius: 10px 10px 0 0;
-            padding: 10px 14px;
-            color: {MUTED};
-            font-weight: 600;
-        }}
-
-        .stTabs [aria-selected="true"] {{
-            color: {TEXT} !important;
-            border-bottom: 2px solid {ACCENT_1};
-        }}
-
-        .stDownloadButton button,
-        .stButton button {{
-            background: {PANEL};
-            color: {TEXT};
-            border: 1px solid {BORDER};
-            border-radius: 10px;
-        }}
-
-        div[data-baseweb="select"] > div,
-        div[data-baseweb="input"] > div {{
-            background-color: #0f1724 !important;
-            color: {TEXT} !important;
-            border-color: {BORDER} !important;
-        }}
-
-        .stSlider label, .stMultiSelect label, .stSelectbox label {{
-            color: {TEXT} !important;
-        }}
-
-        .stDataFrame, div[data-testid="stDataFrame"] {{
-            border-radius: 12px;
-        }}
-
-        h1, h2, h3, h4, h5, h6, p, div, span {{
-            color: {TEXT};
-        }}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# =========================================================
-# HELPERS
-# =========================================================
-REQUIRED_COLUMNS = [
-    "land_use",
-    "event",
-    "ndvi",
-    "ndwi",
-    "lst_celsius",
-    "change_index",
-]
-
-DISPLAY_NAMES = {
-    "ndvi": "Green Cover Score",
-    "ndwi": "Water Presence Score",
-    "lst_celsius": "Surface Heat",
-    "change_index": "Change Score",
-    "land_use": "Area Type",
-    "event": "Situation",
-    "region": "Place",
-    "date": "Date",
-    "latitude": "Latitude",
-    "longitude": "Longitude",
+section[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #111827 0%, #0b1220 100%);
+    border-right: 1px solid rgba(255,255,255,0.08);
 }
 
-
-def style_axis(ax, title: str, xlabel: str, ylabel: str, title_color: str = ACCENT_1):
-    ax.set_facecolor(PANEL)
-    ax.set_title(title, color=title_color, fontsize=12, fontweight="bold", pad=10)
-    ax.set_xlabel(xlabel, color=TEXT, fontsize=10)
-    ax.set_ylabel(ylabel, color=TEXT, fontsize=10)
-    ax.tick_params(colors=TEXT, labelsize=9)
-    for spine in ax.spines.values():
-        spine.set_edgecolor(BORDER)
-    ax.grid(True, linestyle="--", alpha=0.10, color=MUTED)
-
-
-@st.cache_data
-def generate_demo_data(n: int = 900) -> pd.DataFrame:
-    np.random.seed(42)
-
-    land_use = np.random.choice(
-        ["Forest", "Agriculture", "Urban", "Water", "Barren"],
-        size=n,
-        p=[0.24, 0.25, 0.22, 0.14, 0.15],
-    )
-
-    event = np.random.choice(
-        ["None", "Flood", "Wildfire", "Drought"],
-        size=n,
-        p=[0.48, 0.18, 0.16, 0.18],
-    )
-
-    region = np.random.choice(
-        ["North Zone", "South Zone", "East Zone", "West Zone", "Central Zone"],
-        size=n,
-    )
-
-    base_green = np.random.normal(0.45, 0.18, n)
-    base_water = np.random.normal(0.08, 0.16, n)
-    base_heat = np.random.normal(31, 5, n)
-    base_change = np.abs(np.random.normal(0.25, 0.12, n))
-
-    land_adjust_green = pd.Series(land_use).map({
-        "Forest": 0.22,
-        "Agriculture": 0.08,
-        "Urban": -0.18,
-        "Water": -0.10,
-        "Barren": -0.22,
-    }).to_numpy()
-
-    land_adjust_water = pd.Series(land_use).map({
-        "Forest": 0.03,
-        "Agriculture": -0.03,
-        "Urban": -0.07,
-        "Water": 0.35,
-        "Barren": -0.08,
-    }).to_numpy()
-
-    land_adjust_heat = pd.Series(land_use).map({
-        "Forest": -4.5,
-        "Agriculture": -1.0,
-        "Urban": 5.0,
-        "Water": -3.5,
-        "Barren": 3.5,
-    }).to_numpy()
-
-    event_adjust_green = pd.Series(event).map({
-        "None": 0.00,
-        "Flood": -0.05,
-        "Wildfire": -0.18,
-        "Drought": -0.15,
-    }).to_numpy()
-
-    event_adjust_water = pd.Series(event).map({
-        "None": 0.00,
-        "Flood": 0.22,
-        "Wildfire": -0.06,
-        "Drought": -0.12,
-    }).to_numpy()
-
-    event_adjust_heat = pd.Series(event).map({
-        "None": 0.00,
-        "Flood": -1.2,
-        "Wildfire": 5.2,
-        "Drought": 3.4,
-    }).to_numpy()
-
-    event_adjust_change = pd.Series(event).map({
-        "None": 0.02,
-        "Flood": 0.20,
-        "Wildfire": 0.28,
-        "Drought": 0.18,
-    }).to_numpy()
-
-    ndvi = np.clip(base_green + land_adjust_green + event_adjust_green, -0.2, 0.95)
-    ndwi = np.clip(base_water + land_adjust_water + event_adjust_water, -0.6, 0.9)
-    lst_celsius = np.clip(base_heat + land_adjust_heat + event_adjust_heat, 10, 50)
-    change_index = np.clip(base_change + event_adjust_change, 0.01, 1.5)
-
-    start_date = pd.Timestamp("2024-01-01")
-    dates = start_date + pd.to_timedelta(np.random.randint(0, 365, n), unit="D")
-
-    lat = np.random.uniform(12.0, 28.0, size=n)
-    lon = np.random.uniform(72.0, 89.0, size=n)
-
-    return pd.DataFrame({
-        "region": region,
-        "date": dates,
-        "land_use": land_use,
-        "event": event,
-        "ndvi": ndvi,
-        "ndwi": ndwi,
-        "lst_celsius": lst_celsius,
-        "change_index": change_index,
-        "latitude": lat,
-        "longitude": lon,
-    })
-
-
-def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-    df.columns = [c.strip().lower() for c in df.columns]
-
-    for col in ["ndvi", "ndwi", "lst_celsius", "change_index", "latitude", "longitude"]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-
-    if "date" in df.columns:
-        df["date"] = pd.to_datetime(df["date"], errors="coerce")
-
-    for col in ["land_use", "event", "region"]:
-        if col in df.columns:
-            df[col] = df[col].astype(str).str.strip()
-            df.loc[df[col].isin(["nan", "None", ""]), col] = np.nan
-
-    if "land_use" in df.columns:
-        df["land_use"] = df["land_use"].fillna("Unknown")
-    if "event" in df.columns:
-        df["event"] = df["event"].fillna("None")
-    if "region" in df.columns:
-        df["region"] = df["region"].fillna("Unknown Area")
-
-    df = df.dropna(subset=[c for c in REQUIRED_COLUMNS if c in df.columns])
-
-    if "ndvi" in df.columns:
-        df["ndvi"] = df["ndvi"].clip(-1, 1)
-    if "ndwi" in df.columns:
-        df["ndwi"] = df["ndwi"].clip(-1, 1)
-    if "lst_celsius" in df.columns:
-        df["lst_celsius"] = df["lst_celsius"].clip(-20, 80)
-    if "change_index" in df.columns:
-        df["change_index"] = df["change_index"].clip(0, 10)
-
-    if "ndvi" in df.columns:
-        df["green_level"] = pd.cut(
-            df["ndvi"],
-            bins=[-1, 0.15, 0.35, 0.6, 1],
-            labels=["Very Low", "Low", "Moderate", "High"],
-            include_lowest=True,
-        )
-
-    if "lst_celsius" in df.columns:
-        df["heat_level"] = pd.cut(
-            df["lst_celsius"],
-            bins=[-50, 22, 30, 37, 100],
-            labels=["Cool", "Mild", "Warm", "Hot"],
-            include_lowest=True,
-        )
-
-    return df
-
-
-def validate_columns(df: pd.DataFrame) -> Tuple[bool, List[str]]:
-    missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
-    return len(missing) == 0, missing
-
-
-def load_data(uploaded_file) -> pd.DataFrame:
-    if uploaded_file is None:
-        return generate_demo_data()
-
-    file_name = uploaded_file.name.lower()
-
-    if file_name.endswith(".csv"):
-        return pd.read_csv(uploaded_file)
-    if file_name.endswith(".xlsx"):
-        return pd.read_excel(uploaded_file)
-
-    raise ValueError("Only CSV and Excel files are supported.")
-
-
-def build_summary(df: pd.DataFrame) -> Dict[str, float]:
-    return {
-        "rows": len(df),
-        "avg_green": df["ndvi"].mean(),
-        "avg_water": df["ndwi"].mean(),
-        "avg_heat": df["lst_celsius"].mean(),
-        "avg_change": df["change_index"].mean(),
-    }
-
-
-def generate_findings(df: pd.DataFrame) -> List[str]:
-    findings = []
-
-    avg_green = df["ndvi"].mean()
-    avg_heat = df["lst_celsius"].mean()
-    avg_change = df["change_index"].mean()
-
-    if avg_green < 0.25:
-        findings.append("Overall green cover is low across the selected records.")
-
-    if avg_heat > 34:
-        findings.append("Surface heat is high in the selected view.")
-
-    if avg_change > 0.45:
-        findings.append("The overall change level is strong across the current selection.")
-
-    if "event" in df.columns and "Flood" in df["event"].unique():
-        flood_df = df[df["event"] == "Flood"]
-        if not flood_df.empty and flood_df["ndwi"].mean() > df["ndwi"].mean():
-            findings.append("Flood-related records show stronger water presence than the overall average.")
-
-    if "event" in df.columns and "Wildfire" in df["event"].unique():
-        fire_df = df[df["event"] == "Wildfire"]
-        if not fire_df.empty and fire_df["lst_celsius"].mean() > df["lst_celsius"].mean():
-            findings.append("Wildfire-related records are linked with higher surface heat.")
-
-    if "land_use" in df.columns and "Urban" in df["land_use"].unique():
-        urban_df = df[df["land_use"] == "Urban"]
-        if not urban_df.empty and urban_df["lst_celsius"].mean() > df["lst_celsius"].mean():
-            findings.append("Built-up areas are hotter than the overall average.")
-
-    if "land_use" in df.columns and "Forest" in df["land_use"].unique():
-        forest_df = df[df["land_use"] == "Forest"]
-        if not forest_df.empty and forest_df["ndvi"].mean() > df["ndvi"].mean():
-            findings.append("Forest areas show stronger green cover than the overall average.")
-
-    if "region" in df.columns:
-        worst_region = (
-            df.groupby("region")["change_index"]
-            .mean()
-            .sort_values(ascending=False)
-            .head(1)
-        )
-        if not worst_region.empty:
-            findings.append(f"The highest average change is observed in {worst_region.index[0]}.")
-
-    if not findings:
-        findings.append("The selected data looks stable with no standout pattern in the current view.")
-
-    return findings
-
-
-def region_summary(df: pd.DataFrame) -> pd.DataFrame:
-    if "region" not in df.columns:
-        return pd.DataFrame()
-
-    return (
-        df.groupby("region", dropna=False)
-        .agg(
-            records=("ndvi", "size"),
-            green_cover=("ndvi", "mean"),
-            water_presence=("ndwi", "mean"),
-            surface_heat=("lst_celsius", "mean"),
-            change_score=("change_index", "mean"),
-        )
-        .reset_index()
-        .sort_values("change_score", ascending=False)
-    )
-
-
-def event_summary(df: pd.DataFrame) -> pd.DataFrame:
-    return (
-        df.groupby("event", dropna=False)
-        .agg(
-            records=("ndvi", "size"),
-            green_cover=("ndvi", "mean"),
-            water_presence=("ndwi", "mean"),
-            surface_heat=("lst_celsius", "mean"),
-            change_score=("change_index", "mean"),
-        )
-        .reset_index()
-        .sort_values("records", ascending=False)
-    )
-
-
-def downloadable_csv(df: pd.DataFrame) -> bytes:
-    return df.to_csv(index=False).encode("utf-8")
-
-
-# =========================================================
-# CHARTS
-# =========================================================
-def plot_main_relationships(df: pd.DataFrame):
-    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
-    fig.patch.set_facecolor(BG)
-
-    ax = axes[0]
-    for area, grp in df.groupby("land_use"):
-        ax.scatter(
-            grp["ndvi"],
-            grp["lst_celsius"],
-            s=24,
-            alpha=0.58,
-            label=area,
-            color=LAND_COLORS.get(area, "#c9d1d9"),
-        )
-    style_axis(ax, "Green Cover vs Surface Heat", "Green Cover Score", "Surface Heat")
-    leg = ax.legend(fontsize=8, framealpha=0.2)
-    if leg:
-        leg.get_frame().set_facecolor(PANEL)
-        leg.get_frame().set_edgecolor(BORDER)
-        for t in leg.get_texts():
-            t.set_color(TEXT)
-
-    ax = axes[1]
-    for situation, grp in df.groupby("event"):
-        ax.scatter(
-            grp["ndvi"],
-            grp["ndwi"],
-            s=24,
-            alpha=0.60,
-            label=situation,
-            color=EVENT_COLORS.get(situation, "#c9d1d9"),
-        )
-    style_axis(ax, "Green Cover vs Water Presence", "Green Cover Score", "Water Presence Score", ACCENT_2)
-    leg = ax.legend(fontsize=8, framealpha=0.2)
-    if leg:
-        leg.get_frame().set_facecolor(PANEL)
-        leg.get_frame().set_edgecolor(BORDER)
-        for t in leg.get_texts():
-            t.set_color(TEXT)
-
-    ax = axes[2]
-    order = [e for e in ["None", "Flood", "Wildfire", "Drought"] if e in df["event"].unique()]
-    data = [df[df["event"] == e]["change_index"].values for e in order]
-
-    box = ax.boxplot(
-        data,
-        tick_labels=order,
-        patch_artist=True,
-        widths=0.55,
-        medianprops=dict(color="white", linewidth=1.5),
-        whiskerprops=dict(color="#c9d1d9"),
-        capprops=dict(color="#c9d1d9"),
-    )
-
-    for patch, e in zip(box["boxes"], order):
-        patch.set_facecolor(EVENT_COLORS.get(e, "#c9d1d9"))
-        patch.set_alpha(0.70)
-        patch.set_edgecolor(BORDER)
-
-    style_axis(ax, "Change Score by Situation", "Situation", "Change Score", ACCENT_3)
-
-    plt.tight_layout()
-    st.pyplot(fig, width="stretch")
-
-
-def plot_level_breakdown(df: pd.DataFrame):
-    c1, c2 = st.columns(2)
-
-    with c1:
-        fig, ax = plt.subplots(figsize=(7, 4.2))
-        fig.patch.set_facecolor(BG)
-        green_counts = df["green_level"].value_counts(dropna=False).reindex(
-            ["Very Low", "Low", "Moderate", "High"]
-        )
-        ax.bar(
-            green_counts.index.astype(str),
-            green_counts.values,
-            color=[ACCENT_3, ACCENT_5, ACCENT_1, ACCENT_2]
-        )
-        style_axis(ax, "Green Cover Level", "Group", "Count", ACCENT_2)
-        st.pyplot(fig, width="stretch")
-
-    with c2:
-        fig, ax = plt.subplots(figsize=(7, 4.2))
-        fig.patch.set_facecolor(BG)
-        heat_counts = df["heat_level"].value_counts(dropna=False).reindex(
-            ["Cool", "Mild", "Warm", "Hot"]
-        )
-        ax.bar(
-            heat_counts.index.astype(str),
-            heat_counts.values,
-            color=[ACCENT_1, ACCENT_2, ACCENT_5, ACCENT_3]
-        )
-        style_axis(ax, "Surface Heat Level", "Group", "Count", ACCENT_3)
-        st.pyplot(fig, width="stretch")
-
-
-def plot_region_comparison(df: pd.DataFrame):
-    if "region" not in df.columns:
-        st.info("Place-wise comparison is not available because the file does not include a place column.")
-        return
-
-    summary = region_summary(df)
-    if summary.empty:
-        st.info("Place-wise comparison is not available for the current selection.")
-        return
-
-    summary = summary.head(min(10, len(summary)))
-
-    fig, ax = plt.subplots(figsize=(10, 5))
-    fig.patch.set_facecolor(BG)
-
-    bars = ax.barh(
-        summary["region"],
-        summary["change_score"],
-        color=ACCENT_1,
-        alpha=0.78,
-    )
-    ax.invert_yaxis()
-    style_axis(ax, "Places with Highest Change", "Change Score", "Place", ACCENT_1)
-
-    for bar, value in zip(bars, summary["change_score"]):
-        ax.text(
-            bar.get_width() + 0.01,
-            bar.get_y() + bar.get_height() / 2,
-            f"{value:.2f}",
-            va="center",
-            ha="left",
-            color=TEXT,
-            fontsize=9,
-        )
-
-    st.pyplot(fig, width="stretch")
-
-
-def plot_timeline(df: pd.DataFrame):
-    if "date" not in df.columns or df["date"].isna().all():
-        st.info("Time view is not available because the file does not include usable dates.")
-        return
-
-    temp = df.dropna(subset=["date"]).copy()
-    if temp.empty:
-        st.info("Time view is not available for the current selection.")
-        return
-
-    temp["month"] = temp["date"].dt.to_period("M").astype(str)
-    monthly = (
-        temp.groupby("month")
-        .agg(
-            green_cover=("ndvi", "mean"),
-            water_presence=("ndwi", "mean"),
-            surface_heat=("lst_celsius", "mean"),
-            change_score=("change_index", "mean"),
-        )
-        .reset_index()
-    )
-
-    fig, ax = plt.subplots(figsize=(11, 5))
-    fig.patch.set_facecolor(BG)
-    ax.plot(monthly["month"], monthly["green_cover"], marker="o", linewidth=2, label="Green Cover Score")
-    ax.plot(monthly["month"], monthly["water_presence"], marker="o", linewidth=2, label="Water Presence Score")
-    ax.plot(monthly["month"], monthly["change_score"], marker="o", linewidth=2, label="Change Score")
-    style_axis(ax, "Monthly Change View", "Month", "Average Value", ACCENT_4)
-    ax.tick_params(axis="x", rotation=45)
-
-    leg = ax.legend(fontsize=8, framealpha=0.2)
-    if leg:
-        leg.get_frame().set_facecolor(PANEL)
-        leg.get_frame().set_edgecolor(BORDER)
-        for t in leg.get_texts():
-            t.set_color(TEXT)
-
-    st.pyplot(fig, width="stretch")
-
-    fig2, ax2 = plt.subplots(figsize=(11, 4.2))
-    fig2.patch.set_facecolor(BG)
-    ax2.plot(monthly["month"], monthly["surface_heat"], marker="o", linewidth=2)
-    style_axis(ax2, "Monthly Heat View", "Month", "Surface Heat", ACCENT_3)
-    ax2.tick_params(axis="x", rotation=45)
-    st.pyplot(fig2, width="stretch")
-
-
-def show_map(df: pd.DataFrame):
-    if not PYDECK_AVAILABLE:
-        st.info("Map view is unavailable because the map library is not installed.")
-        return
-
-    if "latitude" not in df.columns or "longitude" not in df.columns:
-        st.info("Map view is not available because the file does not include latitude and longitude.")
-        return
-
-    temp = df.dropna(subset=["latitude", "longitude"]).copy()
-    if temp.empty:
-        st.info("Map view is not available for the current selection.")
-        return
-
-    temp = temp.head(2000).copy()
-
-    def point_color(row):
-        ev = row.get("event", "None")
-        if ev == "Flood":
-            return [99, 168, 255, 185]
-        if ev == "Wildfire":
-            return [255, 139, 107, 185]
-        if ev == "Drought":
-            return [241, 199, 91, 185]
-        return [154, 168, 187, 150]
-
-    temp["color"] = temp.apply(point_color, axis=1)
-    temp["size"] = (temp["change_index"].fillna(0.2) * 18000).clip(3000, 40000)
-
-    view_state = pdk.ViewState(
-        latitude=float(temp["latitude"].mean()),
-        longitude=float(temp["longitude"].mean()),
-        zoom=4.2,
-        pitch=30,
-    )
-
-    layer = pdk.Layer(
-        "ScatterplotLayer",
-        data=temp,
-        get_position="[longitude, latitude]",
-        get_fill_color="color",
-        get_radius="size",
-        pickable=True,
-        opacity=0.75,
-    )
-
-    tooltip = {
-        "html": """
-        <b>Place:</b> {region}<br/>
-        <b>Area Type:</b> {land_use}<br/>
-        <b>Situation:</b> {event}<br/>
-        <b>Green Cover:</b> {ndvi}<br/>
-        <b>Water Presence:</b> {ndwi}<br/>
-        <b>Heat:</b> {lst_celsius}<br/>
-        <b>Change:</b> {change_index}
-        """,
-        "style": {
-            "backgroundColor": "#11161d",
-            "color": "white"
-        },
-    }
-
-    st.pydeck_chart(
-        pdk.Deck(
-            layers=[layer],
-            initial_view_state=view_state,
-            tooltip=tooltip,
-            map_style="mapbox://styles/mapbox/dark-v10",
-        ),
-        width="stretch",
-    )
-
+.block-container {
+    padding-top: 1rem;
+    max-width: 1500px;
+}
+
+.main-title {
+    font-size: 3rem;
+    font-weight: 800;
+    background: linear-gradient(90deg,#60a5fa,#34d399,#f59e0b);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.subtitle {
+    color: #9ca3af;
+    font-size: 1rem;
+}
+
+.glass {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(12px);
+    border-radius: 20px;
+    padding: 20px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+}
+
+.metric-card {
+    background: linear-gradient(
+        135deg,
+        rgba(17,24,39,0.95),
+        rgba(31,41,55,0.95)
+    );
+
+    border-radius: 24px;
+    padding: 22px;
+
+    border: 1px solid rgba(255,255,255,0.08);
+
+    transition: all 0.35s ease;
+
+    box-shadow:
+        0 10px 30px rgba(0,0,0,0.25);
+}
+
+.metric-card:hover {
+
+    transform:
+        translateY(-8px)
+        scale(1.02);
+
+    box-shadow:
+        0 20px 40px rgba(0,0,0,0.4);
+}
+
+.metric-title {
+    color: #9ca3af;
+    font-size: 0.9rem;
+}
+
+.metric-value {
+    font-size: 2rem;
+    font-weight: 800;
+    color: white;
+}
+
+.metric-sub {
+    color: #60a5fa;
+    font-size: 0.8rem;
+}
+
+.ai-box {
+    background: linear-gradient(135deg,#1e3a8a,#111827);
+    border-left: 5px solid #60a5fa;
+    padding: 16px;
+    border-radius: 16px;
+    margin-bottom: 10px;
+}
+
+.recommend-box {
+    background: linear-gradient(135deg,#064e3b,#111827);
+    border-left: 5px solid #34d399;
+    padding: 14px;
+    border-radius: 14px;
+    margin-bottom: 10px;
+}
+
+</style>
+""", unsafe_allow_html=True)
 
 # =========================================================
 # HEADER
 # =========================================================
-st.markdown(
-    """
-    <div class="hero">
-        <div class="hero-wrap">
-            <div>
-                <h1 class="hero-title">SBECMS</h1>
-                <div class="hero-subtitle">
-                    Satellite-Based Environmental Change Monitoring System for studying land condition,
-                    water presence, heat patterns, and area-wise change.
-                </div>
-            </div>
-            <div class="hero-pill-row">
-                <div class="hero-pill"><strong>Live</strong> Dashboard</div>
-                <div class="hero-pill"><strong>Mode</strong> Monitoring</div>
-            </div>
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+
+st.markdown("""
+<div style="
+display:flex;
+justify-content:space-between;
+align-items:center;
+padding:14px 24px;
+margin-top:15px;
+margin-bottom:20px;
+background:rgba(255,255,255,0.04);
+border-radius:18px;
+border:1px solid rgba(255,255,255,0.05);
+">
+
+<div style="font-size:1.1rem;font-weight:700;">
+🌍 Live Monitoring Dashboard
+</div>
+
+<div style="display:flex;gap:12px;">
+
+<div style="
+padding:8px 14px;
+background:#1d4ed8;
+border-radius:12px;
+">
+Analytics
+</div>
+
+<div style="
+padding:8px 14px;
+background:#059669;
+border-radius:12px;
+">
+AI Insights
+</div>
+
+<div style="
+padding:8px 14px;
+background:#7c3aed;
+border-radius:12px;
+">
+Satellite Map
+</div>
+
+</div>
+
+</div>
+""", unsafe_allow_html=True)
+
+# =========================================================
+# COLUMN ALIASES
+# =========================================================
+
+COLUMN_ALIASES = {
+
+    "land_use": [
+        "land_use",
+        "land cover",
+        "landcover",
+        "class",
+        "terrain",
+        "lulc",
+        "label"
+    ],
+
+    "event": [
+        "event",
+        "disaster",
+        "hazard",
+        "condition",
+        "risk"
+    ],
+
+    "ndvi": [
+        "ndvi",
+        "vegetation",
+        "veg_index",
+        "greenness"
+    ],
+
+    "ndwi": [
+        "ndwi",
+        "water_index",
+        "moisture"
+    ],
+
+    "lst_celsius": [
+        "lst",
+        "temperature",
+        "temp",
+        "surface_temp",
+        "surface_temperature",
+        "heat",
+        "thermal"
+    ],
+
+    "change_index": [
+        "change",
+        "change_index",
+        "severity",
+        "impact",
+        "risk_score",
+        "damage"
+    ],
+
+    "latitude": [
+        "latitude",
+        "lat",
+        "y"
+    ],
+
+    "longitude": [
+        "longitude",
+        "lon",
+        "lng",
+        "x"
+    ],
+
+    "region": [
+        "region",
+        "location",
+        "district",
+        "city",
+        "state"
+    ],
+
+    "date": [
+        "date",
+        "time",
+        "timestamp"
+    ]
+}
+
+# =========================================================
+# AUTO COLUMN MAPPING
+# =========================================================
+
+def auto_map_columns(df):
+
+    renamed = {}
+
+    lower_cols = {c.lower(): c for c in df.columns}
+
+    for standard_col, aliases in COLUMN_ALIASES.items():
+
+        for alias in aliases:
+
+            if alias.lower() in lower_cols:
+
+                renamed[lower_cols[alias.lower()]] = standard_col
+                break
+
+    df = df.rename(columns=renamed)
+
+    return df
+
+# =========================================================
+# DEMO DATA
+# =========================================================
+
+def generate_demo_data(n=1000):
+
+    np.random.seed(42)
+
+    return pd.DataFrame({
+
+        "land_use": np.random.choice(
+            ["Forest","Urban","Water","Agriculture"],
+            n
+        ),
+
+        "event": np.random.choice(
+            ["None","Flood","Wildfire","Drought"],
+            n
+        ),
+
+        "ndvi": np.random.uniform(-0.1,0.9,n),
+
+        "ndwi": np.random.uniform(-0.2,0.7,n),
+
+        "lst_celsius": np.random.uniform(18,45,n),
+
+        "change_index": np.random.uniform(0,1,n),
+
+        "latitude": np.random.uniform(8,35,n),
+
+        "longitude": np.random.uniform(68,90,n),
+
+        "region": np.random.choice(
+            ["North","South","East","West"],
+            n
+        ),
+
+        "date": pd.date_range(
+            start="2024-01-01",
+            periods=n,
+            freq="D"
+        )
+    })
 
 # =========================================================
 # SIDEBAR
 # =========================================================
+
 with st.sidebar:
-    st.markdown("## Data")
-    uploaded_file = st.file_uploader("Upload CSV or Excel file", type=["csv", "xlsx"])
-    use_demo = st.checkbox("Use demo data", value=(uploaded_file is None))
-    st.markdown("---")
-    st.markdown("## Filters")
 
-# =========================================================
-# LOAD / VALIDATE
-# =========================================================
-try:
-    if use_demo and uploaded_file is None:
-        raw_df = generate_demo_data()
-    else:
-        raw_df = load_data(uploaded_file)
-except Exception as e:
-    st.error(f"Could not load the file: {e}")
-    st.stop()
+    st.header("⚙️ Controls")
 
-df = clean_dataframe(raw_df)
-valid, missing_cols = validate_columns(df)
-
-if not valid:
-    st.error("The file is missing required columns: " + ", ".join(missing_cols))
-    st.markdown(
-        """
-        Required columns:
-        - land_use
-        - event
-        - ndvi
-        - ndwi
-        - lst_celsius
-        - change_index
-        """
+    uploaded_file = st.file_uploader(
+        "Upload CSV or Excel",
+        type=["csv","xlsx"]
     )
-    st.stop()
+
+    use_demo = st.checkbox(
+        "Use Demo Dataset",
+        value=True
+    )
 
 # =========================================================
-# SIDEBAR FILTERS
+# LOAD DATA
 # =========================================================
+
+if uploaded_file:
+
+    try:
+
+        if uploaded_file.name.endswith(".csv"):
+            raw_df = pd.read_csv(uploaded_file)
+
+        else:
+            raw_df = pd.read_excel(uploaded_file)
+
+    except Exception as e:
+
+        st.error(f"Error loading file: {e}")
+        st.stop()
+
+else:
+
+    raw_df = generate_demo_data()
+
+# =========================================================
+# CLEAN DATA
+# =========================================================
+
+df = auto_map_columns(raw_df)
+
+df.columns = [c.lower().strip() for c in df.columns]
+
+# =========================================================
+# DEBUG
+# =========================================================
+
+st.sidebar.write("Detected Columns")
+st.sidebar.write(df.columns.tolist())
+
+# =========================================================
+# HANDLE MISSING COLUMNS SAFELY
+# =========================================================
+
+required_defaults = {
+
+    "land_use": "Unknown",
+
+    "event": "None",
+
+    "ndvi": np.random.uniform(0.2,0.8,len(df)),
+
+    "ndwi": np.random.uniform(-0.2,0.5,len(df)),
+
+    "lst_celsius": np.random.uniform(20,40,len(df)),
+
+    "change_index": np.random.uniform(0.1,0.6,len(df))
+}
+
+missing = []
+
+for col, default_value in required_defaults.items():
+
+    if col not in df.columns:
+
+        missing.append(col)
+
+        df[col] = default_value
+
+if missing:
+
+    st.warning(f"""
+    Missing columns auto-generated:
+    {', '.join(missing)}
+    """)
+
+# =========================================================
+# NUMERIC CONVERSION
+# =========================================================
+
+numeric_cols = [
+    "ndvi",
+    "ndwi",
+    "lst_celsius",
+    "change_index",
+    "latitude",
+    "longitude"
+]
+
+for col in numeric_cols:
+
+    if col in df.columns:
+
+        df[col] = pd.to_numeric(
+            df[col],
+            errors="coerce"
+        )
+
+# =========================================================
+# FILTERS
+# =========================================================
+
 with st.sidebar:
-    land_options = sorted(df["land_use"].dropna().unique().tolist())
-    event_options = sorted(df["event"].dropna().unique().tolist())
 
-    selected_land = st.multiselect("Area Type", land_options, default=land_options)
-    selected_event = st.multiselect("Situation", event_options, default=event_options)
+    st.header("📊 Filters")
 
-    ndvi_min, ndvi_max = float(df["ndvi"].min()), float(df["ndvi"].max())
-    ndwi_min, ndwi_max = float(df["ndwi"].min()), float(df["ndwi"].max())
-    heat_min, heat_max = float(df["lst_celsius"].min()), float(df["lst_celsius"].max())
-    change_min, change_max = float(df["change_index"].min()), float(df["change_index"].max())
+    land_options = df["land_use"].dropna().unique()
 
-    selected_green = st.slider("Green Cover Score", ndvi_min, ndvi_max, (ndvi_min, ndvi_max))
-    selected_water = st.slider("Water Presence Score", ndwi_min, ndwi_max, (ndwi_min, ndwi_max))
-    selected_heat = st.slider("Surface Heat", heat_min, heat_max, (heat_min, heat_max))
-    selected_change = st.slider("Change Score", change_min, change_max, (change_min, change_max))
+    selected_land = st.multiselect(
+        "Land Use",
+        land_options,
+        default=land_options
+    )
 
-    selected_regions = None
-    if "region" in df.columns:
-        region_options = sorted(df["region"].dropna().unique().tolist())
-        selected_regions = st.multiselect("Place", region_options, default=region_options)
+    event_options = df["event"].dropna().unique()
+
+    selected_event = st.multiselect(
+        "Event",
+        event_options,
+        default=event_options
+    )
 
 filtered = df[
-    df["land_use"].isin(selected_land)
-    & df["event"].isin(selected_event)
-    & df["ndvi"].between(selected_green[0], selected_green[1])
-    & df["ndwi"].between(selected_water[0], selected_water[1])
-    & df["lst_celsius"].between(selected_heat[0], selected_heat[1])
-    & df["change_index"].between(selected_change[0], selected_change[1])
+    (df["land_use"].isin(selected_land)) &
+    (df["event"].isin(selected_event))
 ].copy()
 
-if selected_regions is not None:
-    filtered = filtered[filtered["region"].isin(selected_regions)].copy()
+# =========================================================
+# AI MODEL
+# =========================================================
 
-if filtered.empty:
-    st.warning("No records match the selected filters.")
-    st.stop()
+filtered["risk"] = np.where(
+    (
+        (filtered["change_index"] > 0.5) |
+        (filtered["lst_celsius"] > 35)
+    ),
+    1,
+    0
+)
+
+features = filtered[[
+    "ndvi",
+    "ndwi",
+    "lst_celsius",
+    "change_index"
+]].fillna(0)
+
+target = filtered["risk"]
+
+X_train, X_test, y_train, y_test = train_test_split(
+    features,
+    target,
+    test_size=0.2,
+    random_state=42
+)
+
+model = RandomForestClassifier()
+
+model.fit(X_train, y_train)
+
+preds = model.predict(X_test)
+
+acc = accuracy_score(y_test, preds)
 
 # =========================================================
 # METRICS
 # =========================================================
-summary = build_summary(filtered)
 
-m1, m2, m3, m4, m5 = st.columns(5)
-metric_values = [
-    ("Records", f"{summary['rows']:,}", "Rows currently visible"),
-    ("Green Cover", f"{summary['avg_green']:.3f}", "Average score"),
-    ("Water Presence", f"{summary['avg_water']:.3f}", "Average score"),
-    ("Surface Heat", f"{summary['avg_heat']:.2f}", "Average temperature"),
-    ("Change Score", f"{summary['avg_change']:.3f}", "Average level"),
+c1,c2,c3,c4 = st.columns(4)
+
+metrics = [
+
+    (
+        "Records",
+        len(filtered),
+        "Dataset Rows"
+    ),
+
+    (
+        "Avg Temp",
+        round(filtered["lst_celsius"].mean(),2),
+        "Surface Heat"
+    ),
+
+    (
+        "Avg NDVI",
+        round(filtered["ndvi"].mean(),2),
+        "Vegetation"
+    ),
+
+    (
+        "AI Accuracy",
+        f"{acc:.2%}",
+        "Prediction Model"
+    )
 ]
 
-for col, (label, value, note) in zip([m1, m2, m3, m4, m5], metric_values):
+for col, metric in zip([c1,c2,c3,c4], metrics):
+
     with col:
-        st.markdown(
-            f"""
-            <div class="metric-card">
-                <div class="metric-label">{label}</div>
-                <div class="metric-value">{value}</div>
-                <div class="metric-note">{note}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
 
-st.markdown("")
-
-# =========================================================
-# INFO STRIP
-# =========================================================
-c1, c2, c3 = st.columns(3)
-
-with c1:
-    st.markdown(
-        f"""
-        <div class="info-card">
-            <h4>Data Health</h4>
-            <div class="small-note">
-                Loaded rows: {len(raw_df):,}<br/>
-                Clean rows used: {len(filtered):,}<br/>
-                Available columns: {len(df.columns)}
-            </div>
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-title">{metric[0]}</div>
+            <div class="metric-value">{metric[1]}</div>
+            <div class="metric-sub">{metric[2]}</div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-with c2:
-    region_text = "Available" if "region" in df.columns else "Not available"
-    date_text = "Available" if "date" in df.columns and not df["date"].isna().all() else "Not available"
-    map_text = "Available" if ("latitude" in df.columns and "longitude" in df.columns) else "Not available"
-
-    st.markdown(
-        f"""
-        <div class="info-card">
-            <h4>Extra Views</h4>
-            <div class="small-note">
-                Place view: {region_text}<br/>
-                Time view: {date_text}<br/>
-                Map view: {map_text}
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-with c3:
-    st.markdown(
-        f"""
-        <div class="info-card">
-            <h4>Current Selection</h4>
-            <div class="small-note">
-                Area types selected: {len(selected_land)}<br/>
-                Situations selected: {len(selected_event)}<br/>
-                Filtered records shown: {len(filtered):,}
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        """, unsafe_allow_html=True)
 
 # =========================================================
 # TABS
 # =========================================================
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "Overview",
-    "Place Comparison",
-    "Time View",
-    "Map View",
-    "Data Table",
+
+tab1,tab2,tab3,tab4,tab5 = st.tabs([
+    "📈 Analytics",
+    "🧠 AI Insights",
+    "🗺️ Map",
+    "📊 Data",
+    "📉 Trends"
 ])
 
+# =========================================================
+# ANALYTICS
+# =========================================================
+
+# =========================================================
+# ADVANCED ANALYTICS
+# =========================================================
+
 with tab1:
-    st.markdown('<div class="section-card">', unsafe_allow_html=True)
-    st.subheader("Main Comparison")
-    plot_main_relationships(filtered)
-    st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown('<div class="section-card">', unsafe_allow_html=True)
-    st.subheader("Level Breakdown")
-    plot_level_breakdown(filtered)
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.subheader("📈 Environmental Analytics")
 
-    st.markdown('<div class="section-card">', unsafe_allow_html=True)
-    st.subheader("Key Findings")
-    for finding in generate_findings(filtered):
-        st.markdown(f'<div class="finding">{finding}</div>', unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+    # ============================================
+    # CHART 1
+    # ============================================
 
-with tab2:
-    st.markdown('<div class="section-card">', unsafe_allow_html=True)
-    st.subheader("Place Comparison")
-    plot_region_comparison(filtered)
-    st.markdown("</div>", unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
 
-    st.markdown('<div class="section-card">', unsafe_allow_html=True)
-    st.subheader("Place Summary")
-    reg_sum = region_summary(filtered)
-    if reg_sum.empty:
-        st.info("Place summary is not available.")
-    else:
-        st.dataframe(
-            reg_sum.style.format({
-                "green_cover": "{:.3f}",
-                "water_presence": "{:.3f}",
-                "surface_heat": "{:.2f}",
-                "change_score": "{:.3f}",
-            }),
-            width="stretch",
-            height=420,
+    with col1:
+
+        land_summary = filtered.groupby(
+            "land_use"
+        ).agg({
+
+            "ndvi":"mean",
+            "lst_celsius":"mean",
+            "change_index":"mean"
+
+        }).reset_index()
+
+        fig = px.bar(
+            land_summary,
+            x="land_use",
+            y="ndvi",
+            color="change_index",
+            title="Vegetation by Land Type",
+            text_auto=".2f"
         )
-    st.markdown("</div>", unsafe_allow_html=True)
 
-with tab3:
-    st.markdown('<div class="section-card">', unsafe_allow_html=True)
-    st.subheader("Time View")
-    plot_timeline(filtered)
-    st.markdown("</div>", unsafe_allow_html=True)
+        fig.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            height=450
+        )
 
-with tab4:
-    st.markdown('<div class="section-card">', unsafe_allow_html=True)
-    st.subheader("Map View")
-    show_map(filtered)
-    st.markdown("</div>", unsafe_allow_html=True)
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
 
-with tab5:
-    st.markdown('<div class="section-card">', unsafe_allow_html=True)
-    st.subheader("Filtered Data")
-    st.dataframe(filtered, width="stretch", height=420)
+    # ============================================
+    # CHART 2
+    # ============================================
 
-    st.markdown("### Situation Summary")
-    evt_sum = event_summary(filtered)
-    st.dataframe(
-        evt_sum.style.format({
-            "green_cover": "{:.3f}",
-            "water_presence": "{:.3f}",
-            "surface_heat": "{:.2f}",
-            "change_score": "{:.3f}",
-        }),
-        width="stretch",
-        height=260,
+    with col2:
+
+        event_summary = filtered.groupby(
+            "event"
+        ).agg({
+
+            "lst_celsius":"mean",
+            "change_index":"mean"
+
+        }).reset_index()
+
+        fig2 = px.line(
+            event_summary,
+            x="event",
+            y="lst_celsius",
+            markers=True,
+            line_shape="spline",
+            title="Temperature by Event"
+        )
+
+        fig2.update_traces(
+            line=dict(width=4)
+        )
+
+        fig2.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            height=450
+        )
+
+        st.plotly_chart(
+            fig2,
+            use_container_width=True
+        )
+
+    # ============================================
+    # HEATMAP
+    # ============================================
+
+    st.subheader("🔥 Correlation Heatmap")
+
+    corr_cols = [
+        "ndvi",
+        "ndwi",
+        "lst_celsius",
+        "change_index"
+    ]
+
+    corr = filtered[corr_cols].corr()
+
+    heatmap = go.Figure(
+        data=go.Heatmap(
+            z=corr.values,
+            x=corr.columns,
+            y=corr.columns,
+            text=np.round(corr.values,2),
+            texttemplate="%{text}",
+            colorscale="Turbo"
+        )
     )
 
-    d1, d2 = st.columns(2)
-    with d1:
-        st.download_button(
-            label="Download filtered data",
-            data=downloadable_csv(filtered),
-            file_name="filtered_environmental_data.csv",
-            mime="text/csv",
-        )
-    with d2:
-        st.download_button(
-            label="Download place summary",
-            data=downloadable_csv(region_summary(filtered) if "region" in filtered.columns else pd.DataFrame()),
-            file_name="place_summary.csv",
-            mime="text/csv",
+    heatmap.update_layout(
+        template="plotly_dark",
+        height=500,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)"
+    )
+
+    st.plotly_chart(
+        heatmap,
+        use_container_width=True
+    )
+
+    # ============================================
+    # REGION ANALYSIS
+    # ============================================
+
+    if "region" in filtered.columns:
+
+        st.subheader("🌍 Regional Analysis")
+
+        region_df = filtered.groupby(
+            "region"
+        ).agg({
+
+            "change_index":"mean"
+
+        }).reset_index()
+
+        fig3 = px.area(
+            region_df,
+            x="region",
+            y="change_index",
+            title="Environmental Change by Region"
         )
 
-    st.markdown("</div>", unsafe_allow_html=True)
+        fig3.update_layout(
+            template="plotly_dark",
+            height=500,
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)"
+        )
+
+        st.plotly_chart(
+            fig3,
+            use_container_width=True
+        )
+
+with tab2:
+
+    st.subheader("🧠 AI Environmental Intelligence")
+
+    insights = []
+
+    if filtered["lst_celsius"].mean() > 35:
+
+        insights.append(
+            "High surface temperature detected."
+        )
+
+    if filtered["ndvi"].mean() < 0.3:
+
+        insights.append(
+            "Vegetation health is critically low."
+        )
+
+    if filtered["ndwi"].mean() < 0:
+
+        insights.append(
+            "Water stress detected."
+        )
+
+    if filtered["change_index"].mean() > 0.5:
+
+        insights.append(
+            "Rapid environmental changes observed."
+        )
+
+    for insight in insights:
+
+        st.markdown(f"""
+        <div class="ai-box">
+            🚨 {insight}
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.subheader("🌱 AI Recommendations")
+
+    recommendations = [
+
+        "Increase vegetation in urban zones.",
+
+        "Deploy wildfire monitoring systems.",
+
+        "Improve flood detection infrastructure.",
+
+        "Use satellite thermal monitoring."
+    ]
+
+    for rec in recommendations:
+
+        st.markdown(f"""
+        <div class="recommend-box">
+            ✅ {rec}
+        </div>
+        """, unsafe_allow_html=True)
+
+# =========================================================
+# MAP
+# =========================================================
+
+with tab3:
+
+    if (
+        "latitude" in filtered.columns and
+        "longitude" in filtered.columns
+    ):
+
+        st.subheader("🌍 Satellite Risk Map")
+
+        filtered["risk_size"] = (
+            filtered["change_index"] * 50000
+        )
+
+        layer = pdk.Layer(
+            "ScatterplotLayer",
+            data=filtered,
+            get_position='[longitude, latitude]',
+            get_radius='risk_size',
+            get_fill_color='[255,100,100,180]',
+            pickable=True
+        )
+
+        view_state = pdk.ViewState(
+            latitude=float(filtered["latitude"].mean()),
+            longitude=float(filtered["longitude"].mean()),
+            zoom=4,
+            pitch=40
+        )
+
+        deck = pdk.Deck(
+            layers=[layer],
+            initial_view_state=view_state,
+            map_style='mapbox://styles/mapbox/dark-v11'
+        )
+
+        st.pydeck_chart(deck)
+
+    else:
+
+        st.warning(
+            "Latitude/Longitude columns not found."
+        )
+
+# =========================================================
+# DATA
+# =========================================================
+
+with tab4:
+
+    st.dataframe(
+        filtered,
+        use_container_width=True,
+        height=600
+    )
+
+    csv = filtered.to_csv(index=False).encode('utf-8')
+
+    st.download_button(
+        "⬇ Download CSV",
+        csv,
+        "environmental_data.csv",
+        "text/csv"
+    )
+
+# =========================================================
+# TRENDS
+# =========================================================
+
+with tab5:
+
+    if "date" in filtered.columns:
+
+        filtered["date"] = pd.to_datetime(
+            filtered["date"],
+            errors="coerce"
+        )
+
+        monthly = filtered.groupby(
+            filtered["date"].dt.month
+        ).agg({
+
+            "ndvi":"mean",
+
+            "lst_celsius":"mean",
+
+            "change_index":"mean"
+
+        }).reset_index()
+
+        fig = make_subplots(
+            rows=3,
+            cols=1,
+            subplot_titles=(
+                "Vegetation",
+                "Surface Heat",
+                "Environmental Change"
+            )
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=monthly["date"],
+                y=monthly["ndvi"],
+                mode='lines+markers'
+            ),
+            row=1,
+            col=1
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=monthly["date"],
+                y=monthly["lst_celsius"],
+                mode='lines+markers'
+            ),
+            row=2,
+            col=1
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=monthly["date"],
+                y=monthly["change_index"],
+                mode='lines+markers'
+            ),
+            row=3,
+            col=1
+        )
+
+        fig.update_layout(
+            height=800,
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font_color='white'
+        )
+
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
+
+# =========================================================
+# FOOTER
+# =========================================================
+
+st.markdown("""
+<br><br>
+
+<div style='text-align:center;color:gray'>
+
+AI Powered Environmental Intelligence Dashboard
+
+</div>
+""", unsafe_allow_html=True)
